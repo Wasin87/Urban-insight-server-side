@@ -21,7 +21,7 @@ const port = process.env.PORT || 3000;
 
  
 app.use(cors({
-    origin: ['http://localhost:5173', 'https://urban-insight-client.vercel.app'],
+    origin: ['http://localhost:5173', 'https://urban-insight-client.vercel.app', 'https://zap-shift-44e49.web.app'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 }));
