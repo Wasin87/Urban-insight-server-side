@@ -1366,7 +1366,7 @@ app.get('/health', async (req, res) => {
 
 // Root endpoint
 app.get('/', (req, res) => {
-    res.json("Server is connecting.");
+    res.json("Server is connecting now.");
 });
 
 // Error handling middleware
