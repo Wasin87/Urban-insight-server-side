@@ -1350,7 +1350,7 @@ async function run() {
         // Health check endpoint
         app.get('/health', async (req, res) => {
             try {
-                await client.db().admin().ping();
+                // await client.db().admin().ping();
                 
                 const usersCount = await usersCollection.countDocuments();
                 const issuesCount = await issuesCollection.countDocuments();
