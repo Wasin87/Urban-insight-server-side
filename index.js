@@ -3,7 +3,7 @@ const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 
-// Initialize Stripe with proper error handling
+ 
 let stripe;
 try {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -33,7 +33,7 @@ const client = new MongoClient(uri, {
     }
 });
 
-// Collections
+ 
 let issuesCollection;
 let usersCollection;
 let paymentsCollection;
@@ -60,7 +60,7 @@ async function run() {
                 const existingUser = await usersCollection.findOne({ email: user.email });
                 if (existingUser) return res.send({ success: true, message: "User already exists" });
 
-                // Default values for new user
+                 
                 user.role = "user";
                 user.isPremium = false;
                 user.premiumExpiresAt = null;
@@ -108,7 +108,7 @@ async function run() {
             }
         });
 
-        // Get user by email
+         
         app.get('/users/:email', async (req, res) => {
             try {
                 const email = req.params.email;
@@ -160,7 +160,7 @@ async function run() {
                 const id = req.params.id;
                 const { role } = req.body;
                 
-                // Validate role
+                 
                 const validRoles = ['user', 'admin', 'staff', 'rejected', 'blocked'];
                 if (!validRoles.includes(role)) {
                     return res.status(400).send({ 
@@ -168,8 +168,7 @@ async function run() {
                         error: 'Invalid role. Valid roles are: user, admin, staff, rejected, blocked' 
                     });
                 }
-
-                // Update user role
+ 
                 const result = await usersCollection.updateOne(
                     { _id: new ObjectId(id) },
                     { 
