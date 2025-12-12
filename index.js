@@ -1147,23 +1147,23 @@ app.get('/payment-verify', async (req, res) => {
     }
 });
 
-// FIXED: Get user payment history - এখন email ছাড়াও কাজ করবে
+ 
 app.get('/payments', async (req, res) => {
     try {
         const { email, type, limit } = req.query;
         let query = {};
         
-        // যদি email দেয়া থাকে, তাহলে শুধু সেই user এর payments দেখাবে
+        
         if (email && email !== 'undefined' && email !== '') {
             query.userEmail = email;
         }
         
-        // যদি type দেয়া থাকে (premium বা boost)
+         
         if (type && type !== 'all') {
             query.type = type;
         }
         
-        // Default limit 50, কিন্তু query থেকে change করা যাবে
+         
         const paymentLimit = limit ? parseInt(limit) : 50;
         
         const payments = await paymentsCollection
@@ -1172,7 +1172,7 @@ app.get('/payments', async (req, res) => {
             .limit(paymentLimit)
             .toArray();
 
-        // যদি কোনো payment না থাকে, empty array return করবে
+       
         res.send({
             success: true,
             payments: payments,
@@ -1189,7 +1189,7 @@ app.get('/payments', async (req, res) => {
     }
 });
 
-// নতুন: সকল payment এর statistics
+ 
 app.get('/payments-stats', async (req, res) => {
     try {
         const totalPayments = await paymentsCollection.countDocuments();
@@ -1255,7 +1255,7 @@ app.get('/payments/:id', async (req, res) => {
     }
 });
 
-// নতুন: Get payments by user email
+ 
 app.get('/payments/user/:email', async (req, res) => {
     try {
         const email = req.params.email;
@@ -1289,7 +1289,7 @@ app.get('/payments/user/:email', async (req, res) => {
 });
 
 // ADDITIONAL API ENDPOINTS
-// Get user's issue count and premium status
+ 
 app.get('/user-stats/:email', async (req, res) => {
     try {
         const email = req.params.email;
