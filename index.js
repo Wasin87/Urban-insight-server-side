@@ -49,9 +49,9 @@ async function run() {
 
         console.log("✅ MongoDB Connected Successfully");
 
-        /* ================================
-               USER API (Enhanced with Role Management)
-        =================================*/
+        
+            //    USER API  
+       
 
         // Create user
         app.post('/users', async (req, res) => {
@@ -81,13 +81,13 @@ async function run() {
             }
         });
 
-        // Get users with search and filter
+         
         app.get('/users', async (req, res) => {
             try {
                 const { searchText, role } = req.query;
                 let query = {};
 
-                // Search functionality
+              
                 if (searchText) {
                     query.$or = [
                         { displayName: { $regex: searchText, $options: 'i' } },
@@ -95,7 +95,7 @@ async function run() {
                     ];
                 }
 
-                // Role filter
+               
                 if (role && role !== 'all') {
                     query.role = role;
                 }
@@ -121,16 +121,16 @@ async function run() {
                     });
                 }
 
-                // Get user's issue count
+              
                 const issueCount = await issuesCollection.countDocuments({ 
                     submittedBy: email 
                 });
 
-                // Check if premium is expired
+                
                 let isPremium = user.isPremium || false;
                 if (user.premiumExpiresAt && new Date(user.premiumExpiresAt) < new Date()) {
                     isPremium = false;
-                    // Update user status if premium expired
+                   
                     await usersCollection.updateOne(
                         { email },
                         { 
@@ -154,7 +154,7 @@ async function run() {
             }
         });
 
-        // Update user role - MAIN ENDPOINT FOR ROLE MANAGEMENT
+        // Update user role  
         app.patch('/users/:id/role', async (req, res) => {
             try {
                 const id = req.params.id;
@@ -210,14 +210,14 @@ async function run() {
             }
         });
 
-        // Update user by ID (alternative endpoint)
+        // Update user by ID  
         app.patch('/users/:id', async (req, res) => {
             try {
                 const id = req.params.id;
                 const updateData = req.body;
                 updateData.updatedAt = new Date();
 
-                // If role is being updated, also update status
+                
                 if (updateData.role) {
                     updateData.status = (updateData.role === 'blocked' || updateData.role === 'rejected') ? 'inactive' : 'active';
                 }
@@ -263,10 +263,10 @@ async function run() {
                 // Delete user
                 const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
 
-                // Also delete user's issues
+              
                 await issuesCollection.deleteMany({ submittedBy: user.email });
 
-                // Delete user's payments
+                
                 await paymentsCollection.deleteMany({ userEmail: user.email });
 
                 res.send({
@@ -321,9 +321,9 @@ async function run() {
             }
         });
 
-        /* ================================
-               ISSUES API (Enhanced with Role-based Access & Staff Assignment)
-        =================================*/
+         
+            //    ISSUES API  
+       
 
         // GET all issues or by email - Boosted issues first
         app.get('/issues', async (req, res) => {
@@ -345,7 +345,6 @@ async function run() {
                 
                 const result = await issuesCollection.find(query).toArray();
                 
-                // Sort: Boosted first, then by creation date (newest first)
                 result.sort((a, b) => {
                     if (a.isBoosted && !b.isBoosted) return -1;
                     if (!a.isBoosted && b.isBoosted) return 1;
@@ -378,7 +377,7 @@ async function run() {
                 const issueData = req.body;
                 const userEmail = issueData.submittedBy;
 
-                // Check if user exists and get role
+                 
                 const user = await usersCollection.findOne({ email: userEmail });
                 if (!user) {
                     return res.status(404).send({ 
@@ -387,7 +386,7 @@ async function run() {
                     });
                 }
 
-                // Check if user is blocked or rejected
+              
                 if (user.role === 'blocked' || user.role === 'rejected') {
                     return res.status(403).send({
                         success: false,
@@ -396,7 +395,7 @@ async function run() {
                     });
                 }
 
-                // Check if user can report more issues
+               
                 const userIssueCount = await issuesCollection.countDocuments({ 
                     submittedBy: userEmail 
                 });
@@ -404,7 +403,7 @@ async function run() {
                 const isPremium = user.isPremium || false;
                 const premiumExpired = user.premiumExpiresAt && new Date(user.premiumExpiresAt) < new Date();
 
-                // Staff and admins have unlimited access
+                
                 const isStaffOrAdmin = user.role === 'staff' || user.role === 'admin';
 
                 if (!isStaffOrAdmin && (!isPremium || premiumExpired)) {
@@ -426,7 +425,7 @@ async function run() {
                 issueData.upvotedBy = [];
                 issueData.createdAt = new Date();
                 issueData.updatedAt = new Date();
-                issueData.submittedByRole = user.role; // Store user role at time of submission
+                issueData.submittedByRole = user.role;  
 
                 const result = await issuesCollection.insertOne(issueData);
                 
@@ -471,7 +470,7 @@ async function run() {
             }
         });
 
-        // PATCH update issue status (NEW ENDPOINT for staff to update issue status)
+        // PATCH update issue status  
         app.patch('/issues/:id/status', async (req, res) => {
             try {
                 const id = req.params.id;
@@ -495,18 +494,18 @@ async function run() {
                     });
                 }
 
-                // Prepare update data
+             
                 const updateData = {
                     status: status,
                     updatedAt: updatedAt || new Date()
                 };
 
-                // If issue is being resolved, add resolvedAt timestamp
+               
                 if (status === 'resolved') {
                     updateData.resolvedAt = new Date();
                 }
 
-                // If issue is being rejected, add rejectedAt timestamp
+               
                 if (status === 'rejected') {
                     updateData.rejectedAt = new Date();
                     updateData.rejectedBy = issue.assignedStaffEmail;
@@ -525,7 +524,7 @@ async function run() {
                     });
                 }
 
-                // If issue is resolved or rejected, update staff's resolved issues count
+               
                 if (status === 'resolved' || status === 'rejected') {
                     if (issue.assignedStaffId) {
                         await usersCollection.updateOne(
@@ -707,7 +706,7 @@ async function run() {
                     return res.status(404).send({ success: false, message: "Issue not found" });
                 }
                 
-                // Also delete associated payments if any
+                 
                 await paymentsCollection.deleteMany({ issueId: id });
                 
                 res.send({ 
@@ -721,7 +720,7 @@ async function run() {
             }
         });
 
-        // GET staff's assigned issues (includes resolved and rejected)
+        // GET staff's assigned issues  
         app.get('/staff/:staffId/issues', async (req, res) => {
             try {
                 const staffId = req.params.staffId;
@@ -744,9 +743,9 @@ async function run() {
             }
         });
 
-        /* ================================
-               PAYMENT APIs
-        =================================*/
+        
+            //    PAYMENT APIs
+      
 
         // Create premium payment checkout session
         app.post('/create-premium-payment', async (req, res) => {
@@ -1212,9 +1211,9 @@ async function run() {
             }
         });
 
-        /* ================================
-               ADDITIONAL API ENDPOINTS
-        =================================*/
+        
+            //    ADDITIONAL API ENDPOINTS
+       
 
         // Get user's issue count and premium status
         app.get('/user-stats/:email', async (req, res) => {
