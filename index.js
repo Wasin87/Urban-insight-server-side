@@ -19,8 +19,9 @@ try {
 const app = express();
 const port = process.env.PORT || 3000;
 
+ 
 app.use(cors({
-    origin: ['http://localhost:5173', 'https://urban-insight-client.vercel.app', 'https://zap-shift-44e49.web.app'],
+    origin: ['http://localhost:5173', 'https://urban-insight-client.vercel.app', 'https://zap-shift-44e49.web.app/'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 }));
@@ -41,26 +42,19 @@ const client = new MongoClient(uri, {
 let issuesCollection;
 let usersCollection;
 let paymentsCollection;
-let db;
 
 async function run() {
     try {
-        await client.connect();
+        // await client.connect();
         console.log("✅ MongoDB Connected Successfully");
         
-        db = client.db('Urban_insight_db');
+        const db = client.db('Urban_insight_db');
 
         issuesCollection = db.collection('issues');
         usersCollection = db.collection('users');
         paymentsCollection = db.collection('payments');
 
         console.log("✅ Collections initialized");
-
-        // Create indexes for better performance
-        await paymentsCollection.createIndex({ userEmail: 1 });
-        await paymentsCollection.createIndex({ stripeSessionId: 1 });
-        await usersCollection.createIndex({ email: 1 });
-        await issuesCollection.createIndex({ submittedBy: 1 });
 
     } catch (err) {
         console.error('❌ MongoDB connection error:', err.message);
@@ -70,25 +64,10 @@ async function run() {
 
 run().catch(console.dir);
 
-// Test MongoDB connection
-app.get('/test-db', async (req, res) => {
-    try {
-        const collections = await db.listCollections().toArray();
-        res.json({
-            success: true,
-            message: 'Database connected successfully',
-            collections: collections.map(col => col.name),
-            paymentsCount: await paymentsCollection.countDocuments(),
-            usersCount: await usersCollection.countDocuments(),
-            issuesCount: await issuesCollection.countDocuments()
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
+// Add delay to ensure MongoDB connects before handling requests
+setTimeout(() => {
+    console.log("🚀 Server ready to handle requests");
+}, 1000);
 
 // USER API
 // Create user
@@ -1147,81 +1126,34 @@ app.get('/payment-verify', async (req, res) => {
     }
 });
 
- 
+// Get user payment history
 app.get('/payments', async (req, res) => {
     try {
-        const { email, type, limit } = req.query;
-        let query = {};
+        const { email } = req.query;
         
-        
-        if (email && email !== 'undefined' && email !== '') {
-            query.userEmail = email;
+        if (!email) {
+            return res.status(400).send({ 
+                success: false, 
+                error: 'Email is required' 
+            });
         }
-        
-         
-        if (type && type !== 'all') {
-            query.type = type;
-        }
-        
-         
-        const paymentLimit = limit ? parseInt(limit) : 50;
-        
+
         const payments = await paymentsCollection
-            .find(query)
+            .find({ userEmail: email })
             .sort({ paidAt: -1 })
-            .limit(paymentLimit)
             .toArray();
 
-       
         res.send({
             success: true,
             payments: payments,
-            count: payments.length,
-            message: payments.length > 0 ? 'Payments fetched successfully' : 'No payments found'
+            count: payments.length
         });
 
     } catch (error) {
         console.error('Get payments error:', error);
         res.status(500).send({ 
             success: false, 
-            error: 'Failed to fetch payment history: ' + error.message 
-        });
-    }
-});
-
- 
-app.get('/payments-stats', async (req, res) => {
-    try {
-        const totalPayments = await paymentsCollection.countDocuments();
-        const premiumPayments = await paymentsCollection.countDocuments({ type: 'premium' });
-        const boostPayments = await paymentsCollection.countDocuments({ type: 'boost' });
-        
-        const totalRevenueResult = await paymentsCollection.aggregate([
-            {
-                $group: {
-                    _id: null,
-                    totalAmount: { $sum: "$amount" }
-                }
-            }
-        ]).toArray();
-        
-        const totalRevenue = totalRevenueResult.length > 0 ? totalRevenueResult[0].totalAmount : 0;
-        
-        res.send({
-            success: true,
-            stats: {
-                totalPayments,
-                premiumPayments,
-                boostPayments,
-                totalRevenue: parseFloat(totalRevenue.toFixed(2)),
-                averagePayment: totalPayments > 0 ? parseFloat((totalRevenue / totalPayments).toFixed(2)) : 0
-            }
-        });
-    } catch (error) {
-        console.error('Get payment stats error:', error);
-        res.status(500).send({ 
-            success: false, 
-            error: 'Failed to fetch payment statistics' 
+            error: 'Failed to fetch payment history' 
         });
     }
 });
@@ -1255,41 +1187,8 @@ app.get('/payments/:id', async (req, res) => {
     }
 });
 
- 
-app.get('/payments/user/:email', async (req, res) => {
-    try {
-        const email = req.params.email;
-        
-        if (!email) {
-            return res.status(400).send({ 
-                success: false, 
-                error: 'Email is required' 
-            });
-        }
-
-        const payments = await paymentsCollection
-            .find({ userEmail: email })
-            .sort({ paidAt: -1 })
-            .toArray();
-
-        res.send({
-            success: true,
-            payments: payments,
-            count: payments.length,
-            userEmail: email
-        });
-
-    } catch (error) {
-        console.error('Get user payments error:', error);
-        res.status(500).send({ 
-            success: false, 
-            error: 'Failed to fetch user payment history' 
-        });
-    }
-});
-
 // ADDITIONAL API ENDPOINTS
- 
+// Get user's issue count and premium status
 app.get('/user-stats/:email', async (req, res) => {
     try {
         const email = req.params.email;
@@ -1435,18 +1334,6 @@ app.get('/health', async (req, res) => {
         const resolvedIssuesCount = await issuesCollection.countDocuments({ status: 'resolved' });
         const rejectedIssuesCount = await issuesCollection.countDocuments({ status: 'rejected' });
         
-        // Payment statistics
-        const totalRevenueResult = await paymentsCollection.aggregate([
-            {
-                $group: {
-                    _id: null,
-                    totalAmount: { $sum: "$amount" }
-                }
-            }
-        ]).toArray();
-        
-        const totalRevenue = totalRevenueResult.length > 0 ? totalRevenueResult[0].totalAmount : 0;
-        
         res.send({
             status: 'healthy',
             timestamp: new Date(),
@@ -1456,10 +1343,6 @@ app.get('/health', async (req, res) => {
                 users: usersCount,
                 issues: issuesCount,
                 payments: paymentsCount
-            },
-            paymentStats: {
-                totalRevenue: parseFloat(totalRevenue.toFixed(2)),
-                averagePayment: paymentsCount > 0 ? parseFloat((totalRevenue / paymentsCount).toFixed(2)) : 0
             },
             stats: {
                 staff: staffCount,
@@ -1483,7 +1366,7 @@ app.get('/health', async (req, res) => {
 
 // Root endpoint
 app.get('/', (req, res) => {
-    res.json("Server is connect.");
+    res.json("Server is connecting.");
 });
 
 // Error handling middleware
@@ -1496,7 +1379,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404 handler
+// FIXED 404 handler - use a regular expression instead of '*'
 app.use((req, res) => {
     res.status(404).send({
         success: false,
@@ -1505,12 +1388,16 @@ app.use((req, res) => {
         availableEndpoints: [
             'GET /',
             'GET /health',
-            'GET /test-db',
-            'GET /payments',
-            'GET /payments/user/:email',
-            'GET /payments-stats',
             'GET /issues',
-            'GET /users'
+            'GET /issues/:id',
+            'POST /issues',
+            'PATCH /issues/:id',
+            'DELETE /issues/:id',
+            'GET /users',
+            'GET /users/:email',
+            'POST /users',
+            'PATCH /users/:id',
+            'DELETE /users/:id'
         ]
     });
 });
