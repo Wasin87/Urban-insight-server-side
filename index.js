@@ -19,7 +19,7 @@ try {
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Enhanced CORS configuration for Vercel
+ 
 app.use(cors({
     origin: ['http://localhost:5173', 'https://urban-insight-client.vercel.app'],
     credentials: true,
@@ -1366,53 +1366,7 @@ app.get('/health', async (req, res) => {
 
 // Root endpoint
 app.get('/', (req, res) => {
-    res.json({ 
-        message: 'Urban Insight API is running!',
-        version: '2.3.0',
-        timestamp: new Date(),
-        features: {
-            roleManagement: 'Enhanced with staff/rejected/blocked roles',
-            staffAssignment: 'Complete staff-to-issue assignment system',
-            issueStatusManagement: 'Staff can update issue status (in-progress, resolved, rejected)',
-            premium: 'Enabled',
-            stripe: stripe ? 'configured' : 'not configured',
-            issueLimit: 'Free: 3, Premium: Unlimited, Staff/Admin: Unlimited'
-        },
-        endpoints: {
-            users: {
-                create: 'POST /users',
-                get: 'GET /users',
-                getByEmail: 'GET /users/:email',
-                updateRole: 'PATCH /users/:id/role',
-                updateUser: 'PATCH /users/:id',
-                premium: 'PATCH /users/:email/premium',
-                delete: 'DELETE /users/:id',
-                stats: 'GET /user-stats/:email',
-                byRole: 'GET /users-by-role/:role'
-            },
-            issues: {
-                get: 'GET /issues',
-                getSingle: 'GET /issues/:id',
-                create: 'POST /issues',
-                update: 'PATCH /issues/:id',
-                status: 'PATCH /issues/:id/status',
-                assignStaff: 'PATCH /issues/:id/assign-staff',
-                delete: 'DELETE /issues/:id',
-                boost: 'PATCH /issues/:id/boost'
-            },
-            staff: {
-                issues: 'GET /staff/:staffId/issues',
-                stats: 'GET /staff-stats'
-            },
-            payments: {
-                createPremium: 'POST /create-premium-payment',
-                createBoost: 'POST /create-boost-payment',
-                verify: 'GET /payment-verify',
-                verifyPremium: 'GET /premium-verify',
-                history: 'GET /payments'
-            }
-        }
-    });
+    res.json("Server is connecting.");
 });
 
 // Error handling middleware
