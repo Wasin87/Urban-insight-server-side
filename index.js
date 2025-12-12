@@ -1483,23 +1483,7 @@ app.get('/health', async (req, res) => {
 
 // Root endpoint
 app.get('/', (req, res) => {
-    res.json({
-        message: "Urban Insight Server API is running!",
-        version: "2.4.0",
-        timestamp: new Date(),
-        endpoints: {
-            payments: {
-                getAll: "GET /payments?email=user@example.com",
-                getByUser: "GET /payments/user/:email",
-                getStats: "GET /payments-stats",
-                getById: "GET /payments/:id"
-            },
-            users: "GET /users",
-            issues: "GET /issues",
-            health: "GET /health",
-            testDb: "GET /test-db"
-        }
-    });
+    res.json("Server is connect.");
 });
 
 // Error handling middleware
