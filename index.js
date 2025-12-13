@@ -19,7 +19,6 @@ try {
 const app = express();
 const port = process.env.PORT || 3000;
 
- 
 app.use(cors({
     origin: ['http://localhost:5173', 'https://urban-insight-client.vercel.app', 'https://zap-shift-44e49.web.app'],
     credentials: true,
@@ -30,6 +29,11 @@ app.use(express.json());
 
 // MongoDB URI - Using environment variable
 const uri = process.env.MONGODB_URI || `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@wasin3.w2xfr9.mongodb.net/Urban_insight_db?retryWrites=true&w=majority&appName=Wasin3`;
+
+console.log('🔧 Environment Variables Check:');
+console.log('- MONGODB_URI:', process.env.MONGODB_URI ? '✅ Set' : '❌ Missing');
+console.log('- DB_USER:', process.env.DB_USER ? '✅ Set' : '❌ Missing');
+console.log('- SITE_DOMAIN:', process.env.SITE_DOMAIN ? '✅ Set' : '❌ Missing');
 
 const client = new MongoClient(uri, { 
     serverApi: { 
@@ -42,13 +46,14 @@ const client = new MongoClient(uri, {
 let issuesCollection;
 let usersCollection;
 let paymentsCollection;
+let db;
 
 async function run() {
     try {
-        // await client.connect();
+        await client.connect();
         console.log("✅ MongoDB Connected Successfully");
         
-        const db = client.db('Urban_insight_db');
+        db = client.db('Urban_insight_db');
 
         issuesCollection = db.collection('issues');
         usersCollection = db.collection('users');
@@ -68,6 +73,29 @@ run().catch(console.dir);
 setTimeout(() => {
     console.log("🚀 Server ready to handle requests");
 }, 1000);
+
+// Test endpoint to check database connection
+app.get('/test-db', async (req, res) => {
+    try {
+        const collections = await db.listCollections().toArray();
+        const collectionNames = collections.map(col => col.name);
+        
+        res.json({
+            success: true,
+            message: 'Database connected successfully',
+            collections: collectionNames,
+            paymentsCount: await paymentsCollection.countDocuments(),
+            issuesCount: await issuesCollection.countDocuments(),
+            usersCount: await usersCollection.countDocuments()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            message: 'Database connection failed'
+        });
+    }
+});
 
 // USER API
 // Create user
@@ -1126,34 +1154,141 @@ app.get('/payment-verify', async (req, res) => {
     }
 });
 
-// Get user payment history
+// **FIXED: Get ALL payments (email optional)**
 app.get('/payments', async (req, res) => {
     try {
-        const { email } = req.query;
+        const { email, type, limit = 100, page = 1 } = req.query;
+        let query = {};
         
-        if (!email) {
-            return res.status(400).send({ 
-                success: false, 
-                error: 'Email is required' 
-            });
+        // If email is provided, filter by email
+        if (email && email !== 'undefined' && email.trim() !== '') {
+            query.userEmail = email.trim();
         }
-
+        
+        // Filter by payment type if provided
+        if (type && type !== 'all' && ['premium', 'boost'].includes(type)) {
+            query.type = type;
+        }
+        
+        // Pagination
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        
+        // Get total count for pagination
+        const totalPayments = await paymentsCollection.countDocuments(query);
+        const totalPages = Math.ceil(totalPayments / limitNum);
+        
         const payments = await paymentsCollection
-            .find({ userEmail: email })
+            .find(query)
             .sort({ paidAt: -1 })
+            .skip(skip)
+            .limit(limitNum)
             .toArray();
 
         res.send({
             success: true,
             payments: payments,
-            count: payments.length
+            count: payments.length,
+            total: totalPayments,
+            page: pageNum,
+            totalPages: totalPages,
+            limit: limitNum,
+            hasMore: pageNum < totalPages,
+            message: payments.length > 0 
+                ? `${payments.length} payments found` 
+                : 'No payments found'
         });
 
     } catch (error) {
         console.error('Get payments error:', error);
         res.status(500).send({ 
             success: false, 
-            error: 'Failed to fetch payment history' 
+            error: 'Failed to fetch payment history: ' + error.message 
+        });
+    }
+});
+
+// **NEW: Get payments by specific user email (alternative endpoint)**
+app.get('/payments/user/:email', async (req, res) => {
+    try {
+        const email = req.params.email;
+        
+        if (!email || email.trim() === '') {
+            return res.status(400).send({ 
+                success: false, 
+                error: 'Email parameter is required' 
+            });
+        }
+
+        const payments = await paymentsCollection
+            .find({ userEmail: email.trim() })
+            .sort({ paidAt: -1 })
+            .toArray();
+
+        res.send({
+            success: true,
+            payments: payments,
+            count: payments.length,
+            userEmail: email,
+            message: payments.length > 0 
+                ? `${payments.length} payments found for ${email}` 
+                : `No payments found for ${email}`
+        });
+
+    } catch (error) {
+        console.error('Get user payments error:', error);
+        res.status(500).send({ 
+            success: false, 
+            error: 'Failed to fetch user payment history: ' + error.message 
+        });
+    }
+});
+
+// **NEW: Get payment statistics**
+app.get('/payments/stats', async (req, res) => {
+    try {
+        const totalPayments = await paymentsCollection.countDocuments();
+        const premiumPayments = await paymentsCollection.countDocuments({ type: 'premium' });
+        const boostPayments = await paymentsCollection.countDocuments({ type: 'boost' });
+        
+        // Total revenue calculation
+        const revenueResult = await paymentsCollection.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" }
+                }
+            }
+        ]).toArray();
+        
+        const totalRevenue = revenueResult.length > 0 ? revenueResult[0].totalAmount : 0;
+        
+        // Recent payments
+        const recentPayments = await paymentsCollection
+            .find({})
+            .sort({ paidAt: -1 })
+            .limit(10)
+            .toArray();
+
+        res.send({
+            success: true,
+            stats: {
+                totalPayments,
+                premiumPayments,
+                boostPayments,
+                totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+                averagePayment: totalPayments > 0 ? parseFloat((totalRevenue / totalPayments).toFixed(2)) : 0
+            },
+            recentPayments: recentPayments.slice(0, 5),
+            timestamp: new Date()
+        });
+
+    } catch (error) {
+        console.error('Get payment stats error:', error);
+        res.status(500).send({ 
+            success: false, 
+            error: 'Failed to fetch payment statistics' 
         });
     }
 });
@@ -1162,6 +1297,14 @@ app.get('/payments', async (req, res) => {
 app.get('/payments/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).send({ 
+                success: false, 
+                error: 'Invalid payment ID format' 
+            });
+        }
+        
         const payment = await paymentsCollection.findOne({ 
             _id: new ObjectId(id) 
         });
@@ -1182,7 +1325,7 @@ app.get('/payments/:id', async (req, res) => {
         console.error('Get payment error:', error);
         res.status(500).send({ 
             success: false, 
-            error: 'Failed to fetch payment details' 
+            error: 'Failed to fetch payment details: ' + error.message 
         });
     }
 });
@@ -1334,6 +1477,18 @@ app.get('/health', async (req, res) => {
         const resolvedIssuesCount = await issuesCollection.countDocuments({ status: 'resolved' });
         const rejectedIssuesCount = await issuesCollection.countDocuments({ status: 'rejected' });
         
+        // Payment stats
+        const revenueResult = await paymentsCollection.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" }
+                }
+            }
+        ]).toArray();
+        
+        const totalRevenue = revenueResult.length > 0 ? revenueResult[0].totalAmount : 0;
+        
         res.send({
             status: 'healthy',
             timestamp: new Date(),
@@ -1343,6 +1498,10 @@ app.get('/health', async (req, res) => {
                 users: usersCount,
                 issues: issuesCount,
                 payments: paymentsCount
+            },
+            paymentStats: {
+                totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+                averagePayment: paymentsCount > 0 ? parseFloat((totalRevenue / paymentsCount).toFixed(2)) : 0
             },
             stats: {
                 staff: staffCount,
@@ -1366,7 +1525,7 @@ app.get('/health', async (req, res) => {
 
 // Root endpoint
 app.get('/', (req, res) => {
-    res.json("Server is connecting now.");
+    res.json("Urban Insight Server API is running!");
 });
 
 // Error handling middleware
@@ -1379,7 +1538,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-// FIXED 404 handler - use a regular expression instead of '*'
+// 404 handler
 app.use((req, res) => {
     res.status(404).send({
         success: false,
@@ -1388,16 +1547,12 @@ app.use((req, res) => {
         availableEndpoints: [
             'GET /',
             'GET /health',
+            'GET /test-db',
+            'GET /payments',
+            'GET /payments/user/:email',
+            'GET /payments/stats',
             'GET /issues',
-            'GET /issues/:id',
-            'POST /issues',
-            'PATCH /issues/:id',
-            'DELETE /issues/:id',
-            'GET /users',
-            'GET /users/:email',
-            'POST /users',
-            'PATCH /users/:id',
-            'DELETE /users/:id'
+            'GET /users'
         ]
     });
 });
@@ -1407,4 +1562,6 @@ app.listen(port, () => {
     console.log(`🚀 Server listening on port ${port}`);
     console.log(`📡 Environment: ${process.env.NODE_ENV}`);
     console.log(`🔗 API Base URL: http://localhost:${port}`);
+    console.log(`🔗 Vercel URL: https://urban-insight-server-side-api.vercel.app`);
+    console.log(`💳 Stripe: ${stripe ? '✅ Configured' : '❌ Not configured'}`);
 });
