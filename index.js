@@ -50,8 +50,8 @@ let db;
 
 async function run() {
     try {
-        await client.connect();
-        console.log("✅ MongoDB Connected Successfully");
+        // await client.connect();
+        // console.log("✅ MongoDB Connected Successfully");
         
         db = client.db('Urban_insight_db');
 
